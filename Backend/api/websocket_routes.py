@@ -169,9 +169,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         manager.disconnect(session_id)
         if current_generation_task and not current_generation_task.done():
             current_generation_task.cancel()
+        # Ensure interview is finalized on disconnect if not already done
+        asyncio.create_task(service.finalize_interview(session_id))
     except Exception as e:
         import traceback
         traceback.print_exc()
         manager.disconnect(session_id)
         if current_generation_task and not current_generation_task.done():
             current_generation_task.cancel()
+        asyncio.create_task(service.finalize_interview(session_id))

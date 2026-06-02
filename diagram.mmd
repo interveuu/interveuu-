@@ -1,0 +1,75 @@
+graph TD
+    subgraph Frontend ["Frontend Application"]
+        Mic["Microphone Access"]
+        VAD["VAD & Silence Detection"]
+        LiveSession["LiveInterviewSession Component"]
+        AudioPlayer["Audio Player Queue"]
+        
+        Mic --> VAD
+        VAD -- "Triggers recording end<br>on silence" --> LiveSession
+    end
+    
+    subgraph Backend ["Backend System"]
+        Router["FastAPI WebSocket Router"]
+        InterviewSvc["Interview Service"]
+        DB[("MongoDB")]
+        
+        subgraph AI_Services ["AI Services"]
+            STT["STT Service"]
+            LLM["LLM Service Evaluator"]
+            TTS["TTS Service"]
+        end
+    end
+    
+    subgraph External ["External Providers"]
+        GroqWhisper["Groq Whisper-large-v3-turbo"]
+        GroqLLM["Groq LLaMA-3.3 70B"]
+        Gemini["Gemini Flash 2.5"]
+        EdgeTTS["Microsoft Edge TTS"]
+    end
+
+    %% Connections
+    LiveSession -->|"WebSocket Connection<br>audio_data start_interview"| Router
+    Router -->|"Streams back<br>transcription text_chunk audio_output"| LiveSession
+    Router -.->|"Playback audio output"| AudioPlayer
+    
+    Router -->|"Route incoming chunks"| InterviewSvc
+    InterviewSvc -->|"1. Convert Audio to Text"| STT
+    InterviewSvc -->|"2. Process Context & Text"| LLM
+    InterviewSvc -->|"3. Generate Speech"| TTS
+    
+    STT -->|"Returns Transcription"| InterviewSvc
+    LLM -->|"Streams Text Chunks"| Router
+    TTS -->|"Returns base64 Audio"| Router
+    
+    InterviewSvc <-->|"Fetch/Update Session<br>& Answer Evaluations"| DB
+    LLM -.->|"Async Answer Evaluations"| DB
+    LLM -.->|"Summaries/Final Report"| DB
+    
+    STT <--> GroqWhisper
+    LLM <--> GroqLLM
+    LLM <--> Gemini
+    TTS <--> EdgeTTS
+
+    %% Styling
+    style Frontend fill:#e6f3ff,stroke:#00a2ed,stroke-width:2px,color:#000000
+    style Mic fill:#3b82f6,color:#ffffff,stroke:#1d4ed8,stroke-width:1px
+    style VAD fill:#3b82f6,color:#ffffff,stroke:#1d4ed8,stroke-width:1px
+    style LiveSession fill:#3b82f6,color:#ffffff,stroke:#1d4ed8,stroke-width:1px
+    style AudioPlayer fill:#3b82f6,color:#ffffff,stroke:#1d4ed8,stroke-width:1px
+
+    style Backend fill:#e8fae6,stroke:#32cd32,stroke-width:2px,color:#000000
+    style Router fill:#20b2aa,color:#ffffff,stroke:#0f5c2f,stroke-width:1px
+    style InterviewSvc fill:#f59e0b,color:#ffffff,stroke:#b45309,stroke-width:1px
+    style DB fill:#ef4444,color:#ffffff,stroke:#b91c1c,stroke-width:1px
+
+    style AI_Services fill:#f0f4f8,stroke:#cbd5e1,color:#000000
+    style STT fill:#f59e0b,color:#ffffff,stroke:#b45309,stroke-width:1px
+    style LLM fill:#f59e0b,color:#ffffff,stroke:#b45309,stroke-width:1px
+    style TTS fill:#f59e0b,color:#ffffff,stroke:#b45309,stroke-width:1px
+
+    style External fill:#fefce8,stroke:#fef08a,stroke-width:2px,color:#000000
+    style GroqWhisper fill:#8b5cf6,color:#ffffff,stroke:#5b21b6,stroke-width:1px
+    style GroqLLM fill:#8b5cf6,color:#ffffff,stroke:#5b21b6,stroke-width:1px
+    style Gemini fill:#8b5cf6,color:#ffffff,stroke:#5b21b6,stroke-width:1px
+    style EdgeTTS fill:#8b5cf6,color:#ffffff,stroke:#5b21b6,stroke-width:1px

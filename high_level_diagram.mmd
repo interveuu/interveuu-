@@ -1,0 +1,63 @@
+graph LR
+    %% Subgraphs
+    subgraph FrontendZone [Client Interfaces]
+        direction TB
+        Candidate["Candidate Portal<br>Apply & Interview"]
+        Recruiter["Recruiter Dashboard<br>Manage Jobs & Candidates"]
+    end
+    
+    subgraph BackendZone [FastAPI Server]
+        direction TB
+        APIRouter["REST API<br>Auth, Jobs, Reports"]
+        CVScreener["CV Screener<br>PDF Parsing & Evaluation"]
+        WSRouter["WebSocket Server<br>Live Interview Stream"]
+    end
+    
+    subgraph AIEngineZone [Interview Orchestrator]
+        AIEngine["Core AI Agent<br>STT, LLM & TTS Pipeline"]
+    end
+    
+    subgraph DBZone [Data Storage]
+        DB[("MongoDB")]
+    end
+    
+    subgraph ExternalZone [External Services]
+        External["Cloud AI Providers<br>Groq, Gemini, EdgeTTS"]
+    end
+
+    %% Connections
+    Candidate <-->|"Upload CV & Profile Data"| APIRouter
+    Candidate <-->|"Live Audio Streams"| WSRouter
+    
+    Recruiter <-->|"Manage Jobs & View Analytics"| APIRouter
+    
+    APIRouter -->|"Parse Documents"| CVScreener
+    APIRouter <-->|"Read/Write Data"| DB
+    
+    CVScreener <-->|"Analyze Resumes"| External
+    CVScreener -->|"Store Initial Rank/Scores"| DB
+    
+    WSRouter <-->|"Route Session Data"| AIEngine
+    WSRouter <-->|"Initialize Connection & Config"| DB
+    
+    AIEngine <-->|"Log Answers & Feedback"| DB
+    AIEngine <-->|"Speech Input/Output & Inference"| External
+
+    %% Theme similar to diagram.mmd
+    style FrontendZone fill:#e6f3ff,stroke:#00a2ed,stroke-width:2px,color:#000000
+    style Candidate fill:#3b82f6,color:#ffffff,stroke:#1d4ed8,stroke-width:1px
+    style Recruiter fill:#3b82f6,color:#ffffff,stroke:#1d4ed8,stroke-width:1px
+    
+    style BackendZone fill:#e8fae6,stroke:#32cd32,stroke-width:2px,color:#000000
+    style APIRouter fill:#20b2aa,color:#ffffff,stroke:#0f5c2f,stroke-width:1px
+    style CVScreener fill:#20b2aa,color:#ffffff,stroke:#0f5c2f,stroke-width:1px
+    style WSRouter fill:#20b2aa,color:#ffffff,stroke:#0f5c2f,stroke-width:1px
+    
+    style AIEngineZone fill:#f0f4f8,stroke:#cbd5e1,color:#000000
+    style AIEngine fill:#f59e0b,color:#ffffff,stroke:#b45309,stroke-width:1px
+    
+    style DBZone fill:#fae8e8,stroke:#ef4444,stroke-width:2px,color:#000000
+    style DB fill:#ef4444,color:#ffffff,stroke:#b91c1c,stroke-width:1px
+    
+    style ExternalZone fill:#fefce8,stroke:#fef08a,stroke-width:2px,color:#000000
+    style External fill:#8b5cf6,color:#ffffff,stroke:#5b21b6,stroke-width:1px

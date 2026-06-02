@@ -259,8 +259,13 @@ class InterviewService:
             return
         session, context = session_data
         
-        # 1. Calculate Scores from Evaluations
+        # Prevent double finalization
         session_doc = await self.db.interview_sessions.find_one({"session_id": session_id})
+        status = session_doc.get("status", "In Progress")
+        if status == "Completed":
+            return {"score": session_doc.get("avg_score", 0), "summary": "Already evaluated.", "status": status}
+
+        # 1. Calculate Scores from Evaluations
         evaluations = session_doc.get("answer_evaluations", [])
         
         tech_acc_sum = 0
@@ -377,7 +382,14 @@ class InterviewService:
         
         # Fetch Job to get Recruiter ID
         from bson import ObjectId
-        job = await self.db.job_postings.find_one({"_id": ObjectId(job_id)}) if job_id else None
+        from bson.errors import InvalidId
+        job = None
+        if job_id:
+            try:
+                job = await self.db.job_postings.find_one({"_id": ObjectId(job_id)})
+            except InvalidId:
+                job = None
+                
         recruiter_id = job.get("recruiter_id") if job else "Unknown Recruiter"
         position = job.get("interview_field", "General Position") if job else "General Position"
         candidate_name = session.candidate_name
