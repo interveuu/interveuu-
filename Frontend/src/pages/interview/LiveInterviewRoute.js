@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import LiveInterviewSession from "../../components/interview/LiveInterviewSession";
 import AudioRecorder from "../../components/interview/AudioRecorder";
@@ -28,6 +29,8 @@ const LiveInterviewRoute = () => {
     const [liveCaption, setLiveCaption] = useState("");
     const [isEndModalOpen, setIsEndModalOpen] = useState(false);
     const [hasStarted, setHasStarted] = useState(false);
+    const [cvNotification, setCvNotification] = useState("");
+    const cvNotificationTimeoutRef = useRef(null);
 
     const wordBufferRef = useRef([]);
     const captionIntervalRef = useRef(null);
@@ -145,6 +148,7 @@ const LiveInterviewRoute = () => {
             unsubscribe();
             if (ws.current) ws.current.close();
             if (audioRef.current) audioRef.current.pause();
+            if (cvNotificationTimeoutRef.current) clearTimeout(cvNotificationTimeoutRef.current);
         };
     }, [sessionId, candidateName, jobTitle, hasStarted]);
 
@@ -187,6 +191,13 @@ const LiveInterviewRoute = () => {
                     ws.current?.close();
                     navigate("/candidate/interview-complete", { state: { sessionId, candidateName, jobTitle, isDemo } });
                 }
+                break;
+            case 'cv_notification':
+                setCvNotification(data.payload);
+                if (cvNotificationTimeoutRef.current) {
+                    clearTimeout(cvNotificationTimeoutRef.current);
+                }
+                cvNotificationTimeoutRef.current = setTimeout(() => setCvNotification(""), 5000);
                 break;
             default:
                 break;
@@ -311,6 +322,12 @@ const LiveInterviewRoute = () => {
         };
     };
 
+    const handleFrameCaptured = (base64Image) => {
+        if (ws.current?.readyState === WebSocket.OPEN) {
+            ws.current.send(JSON.stringify({ type: 'video_frame', payload: base64Image }));
+        }
+    };
+
     const handleEndInterview = () => {
         // Show the premium confirmation modal instead of directly dropping the websocket or sending text
         setIsEndModalOpen(true);
@@ -345,6 +362,7 @@ const LiveInterviewRoute = () => {
                         liveCaption={liveCaption}
                         onEndInterview={handleEndInterview}
                         isConnected={isConnected}
+                        onFrameCaptured={handleFrameCaptured}
                     />
 
                     <AudioRecorder
@@ -353,6 +371,21 @@ const LiveInterviewRoute = () => {
                         isRecording={currentState === ConversationState.LISTENING}
                         isDetectingInterrupt={false}
                     />
+                    
+                    {/* CV Notification Toast */}
+                    <AnimatePresence>
+                        {cvNotification && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                                className="absolute top-24 left-1/2 transform -translate-x-1/2 z-50 bg-red-500 text-white px-6 py-3 rounded-full shadow-lg font-semibold flex items-center gap-3"
+                            >
+                                <AlertTriangle className="w-5 h-5" />
+                                {cvNotification}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 {/* Premium End Interview Confirmation Modal */}

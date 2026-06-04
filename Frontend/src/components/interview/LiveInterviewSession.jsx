@@ -75,7 +75,8 @@ const LiveInterviewSession = ({
     onInterrupt,
     liveCaption, /* Accept liveCaption from App parent */
     onEndInterview,
-    isConnected
+    isConnected,
+    onFrameCaptured // New prop for CV agent
 }) => {
     // State
     const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
@@ -152,6 +153,25 @@ const LiveInterviewSession = ({
             }
         };
     }, [isCamOn]);
+
+    // Frame Capture for CV Agent
+    useEffect(() => {
+        if (!isCamOn || !onFrameCaptured) return;
+        
+        const captureInterval = setInterval(() => {
+            if (videoRef.current && videoRef.current.videoWidth > 0) {
+                const canvas = document.createElement('canvas');
+                canvas.width = videoRef.current.videoWidth;
+                canvas.height = videoRef.current.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                onFrameCaptured(base64Image);
+            }
+        }, 1000); // 1 frame per second
+        
+        return () => clearInterval(captureInterval);
+    }, [isCamOn, onFrameCaptured]);
 
     // Auto-scroll Transcript
     const transcriptRef = useRef(null);

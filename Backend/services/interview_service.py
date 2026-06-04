@@ -250,7 +250,7 @@ class InterviewService:
     async def generate_speech(self, text: str) -> Optional[bytes]:
         return await self.tts_service.generate_speech(text)
 
-    async def finalize_interview(self, session_id: str):
+    async def finalize_interview(self, session_id: str, cv_metrics=None):
         """
         Evaluate transcript and generate final report
         """
@@ -302,7 +302,27 @@ class InterviewService:
             confidence_score = 0
             
         # Base interview score calculation
-        interview_score = (technical_score * 0.5) + (communication_score * 0.3) + (confidence_score * 0.2)
+        interview_performance_score = (technical_score * 0.5) + (communication_score * 0.3) + (confidence_score * 0.2)
+        
+        # Calculate Visual Intelligence Score if metrics exist
+        visual_intelligence_score = 0
+        if cv_metrics:
+            visual_intelligence_score = (
+                (cv_metrics.get("eye_contact_score", 0) * 0.33) + 
+                (cv_metrics.get("attentiveness_score", 0) * 0.33) + 
+                (cv_metrics.get("engagement_score", 0) * 0.17) + 
+                (cv_metrics.get("confidence_score", 0) * 0.17)
+            ) # This yields out of 100 max
+            
+            # Save visual metrics to new collection
+            cv_metrics["interview_id"] = session_id
+            cv_metrics["candidate_id"] = session_doc.get("candidate_id")
+            cv_metrics["created_at"] = datetime.utcnow()
+            await self.db.candidate_visual_analysis.insert_one(cv_metrics)
+            
+            interview_score = (interview_performance_score * 0.70) + (visual_intelligence_score * 0.30)
+        else:
+            interview_score = interview_performance_score
         
         # 2. Penalty Logic
         status = session_doc.get("status", "Completed")
@@ -335,6 +355,23 @@ class InterviewService:
         from agents.interview_agent.prompts import FINAL_FEEDBACK_REPORT_PROMPT
         from cv_screener.gemini_screener import GeminiCVScreener
         
+        # Prepare Visual Communication Analysis text for Feedback Agent
+        visual_feedback_text = ""
+        if cv_metrics:
+            def categorize(score):
+                if score >= 80: return "Excellent"
+                if score >= 60: return "Good"
+                if score >= 40: return "Average"
+                return "Poor"
+            
+            visual_feedback_text = (
+                f"\n\nVisual Communication Analysis:\n"
+                f"- Eye Contact: {categorize(cv_metrics.get('eye_contact_score', 0))}\n"
+                f"- Attentiveness: {categorize(cv_metrics.get('attentiveness_score', 0))}\n"
+                f"- Engagement: {categorize(cv_metrics.get('engagement_score', 0))}\n"
+                f"- Visual Confidence: {categorize(cv_metrics.get('confidence_score', 0))}\n"
+            )
+
         feedback_prompt = FINAL_FEEDBACK_REPORT_PROMPT.format(
             cv_score=cv_score,
             technical_score=technical_score,
@@ -342,7 +379,7 @@ class InterviewService:
             confidence_score=confidence_score,
             final_score=final_score,
             status=status
-        )
+        ) + visual_feedback_text
         
         screener = GeminiCVScreener()
         # Using a raw call because the prompt is direct text 
@@ -404,6 +441,7 @@ class InterviewService:
                     "technical_score": technical_score,
                     "communication_score": communication_score,
                     "confidence_score": confidence_score,
+                    "facial_recognition_score": visual_intelligence_score if cv_metrics else 0,
                     "completion": 100,
                     "interview_status": "Completed" if status != "Manually Ended" else status,
                     "evaluation_details.interview_summary": feedback_report
@@ -427,6 +465,7 @@ class InterviewService:
                 "Interview Technical": technical_score,
                 "Interview Communication": communication_score,
                 "Interview Confidence": confidence_score,
+                "Visual Intelligence": visual_intelligence_score if cv_metrics else 0,
                 "CV Score": cv_score
             },
             detailed_analysis=feedback_report,
@@ -439,7 +478,8 @@ class InterviewService:
             "skills": [
                 {"name": "Technical Knowledge", "score": int(technical_score)},
                 {"name": "Communication", "score": int(communication_score)},
-                {"name": "Confidence", "score": int(confidence_score)},
+                {"name": "Verbal Confidence", "score": int(confidence_score)},
+                {"name": "Visual Intelligence", "score": int(visual_intelligence_score) if cv_metrics else 0},
                 {"name": "CV Initial Score", "score": int(cv_score)}
             ],
             "strengths": ["Data-driven metrics calculated", "AI Feedback generated"],

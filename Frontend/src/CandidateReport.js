@@ -18,6 +18,7 @@ import {
     AlertTriangle
 } from "lucide-react";
 import { motion } from "framer-motion";
+import Plot from 'react-plotly.js';
 import API_BASE_URL from "./apiConfig";
 import RecruiterSidebar from "./components/RecruiterSidebar";
 
@@ -27,6 +28,7 @@ const CandidateReport = () => {
     const [recruiterData, setRecruiterData] = useState(null);
     const [report, setReport] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState("overview"); // "overview" or "visual_analytics"
 
     useEffect(() => {
         const storedUser = localStorage.getItem("recruiterUser");
@@ -310,7 +312,7 @@ const CandidateReport = () => {
                         </div>
 
                         {report.manualEndDetected && (
-                            <div className="bg-orange-50 border-l-4 border-orange-500 p-5 rounded-2xl flex gap-3 shadow-sm items-center">
+                            <div className="bg-orange-50 border-l-4 border-orange-500 p-5 rounded-2xl flex gap-3 shadow-sm items-center mt-6">
                                 <AlertTriangle className="w-6 h-6 text-orange-500 shrink-0" />
                                 <div>
                                     <h5 className="font-bold text-orange-800">Interview Ended Early</h5>
@@ -319,8 +321,27 @@ const CandidateReport = () => {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-3 gap-6">
-                            {/* Skills Breakdown */}
+                        {/* Tabs */}
+                        <div className="flex gap-4 border-b border-gray-200 mt-6 pb-2">
+                            <button 
+                                onClick={() => setActiveTab("overview")} 
+                                className={`px-4 py-2 font-bold transition-all ${activeTab === "overview" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                            >
+                                Overview
+                            </button>
+                            {report.visualAnalytics && (
+                                <button 
+                                    onClick={() => setActiveTab("visual_analytics")} 
+                                    className={`px-4 py-2 font-bold transition-all flex gap-2 items-center ${activeTab === "visual_analytics" ? "text-purple-600 border-b-2 border-purple-600" : "text-gray-500 hover:text-gray-700"}`}
+                                >
+                                    <Star className="w-4 h-4" /> Visual Analytics
+                                </button>
+                            )}
+                        </div>
+
+                        {activeTab === "overview" ? (
+                            <div className="grid grid-cols-3 gap-6 mt-6">
+                                {/* Skills Breakdown */}
                             <div className="col-span-2 space-y-6">
                                 <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
                                     <h4 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
@@ -439,6 +460,109 @@ const CandidateReport = () => {
                                 </div>
                             </div>
                         </div>
+                        ) : (
+                            // VISUAL ANALYTICS TAB
+                            <div className="space-y-6 mt-6">
+                                <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
+                                    <h4 className="text-xl font-bold text-gray-800 mb-6">Visual Intelligence Overview</h4>
+                                    <div className="grid grid-cols-4 gap-4">
+                                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 text-center">
+                                            <p className="text-blue-500 font-bold uppercase text-xs tracking-wider">Eye Contact</p>
+                                            <p className="text-3xl font-black text-blue-700 mt-2">{report.visualAnalytics.eye_contact_percentage}%</p>
+                                        </div>
+                                        <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 text-center">
+                                            <p className="text-indigo-500 font-bold uppercase text-xs tracking-wider">Attentiveness</p>
+                                            <p className="text-3xl font-black text-indigo-700 mt-2">{report.visualAnalytics.presence_percentage}%</p>
+                                        </div>
+                                        <div className="bg-purple-50 p-6 rounded-2xl border border-purple-100 text-center">
+                                            <p className="text-purple-500 font-bold uppercase text-xs tracking-wider">Engagement</p>
+                                            <p className="text-3xl font-black text-purple-700 mt-2">{report.visualAnalytics.engagement_percentage}%</p>
+                                        </div>
+                                        <div className="bg-pink-50 p-6 rounded-2xl border border-pink-100 text-center">
+                                            <p className="text-pink-500 font-bold uppercase text-xs tracking-wider">Visual Confidence</p>
+                                            <p className="text-3xl font-black text-pink-700 mt-2">{report.visualAnalytics.confidence_score}%</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mt-4">
+                                        <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100 flex justify-between items-center">
+                                            <div>
+                                                <p className="text-amber-600 font-bold uppercase text-xs tracking-wider">Look Away Events</p>
+                                                <p className="text-sm text-amber-700 mt-1">Brief instances of looking away</p>
+                                            </div>
+                                            <p className="text-3xl font-black text-amber-700">{report.visualAnalytics.look_away_events}</p>
+                                        </div>
+                                        <div className="bg-red-50 p-6 rounded-2xl border border-red-100 flex justify-between items-center">
+                                            <div>
+                                                <p className="text-red-600 font-bold uppercase text-xs tracking-wider">Long Look Away Events</p>
+                                                <p className="text-sm text-red-700 mt-1">Looking away for &gt;8 seconds</p>
+                                            </div>
+                                            <p className="text-3xl font-black text-red-700">{report.visualAnalytics.long_look_away_events}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
+                                        <h4 className="text-xl font-bold text-gray-800 mb-6">Visual Metrics Chart</h4>
+                                        <Plot
+                                            data={[
+                                                {
+                                                    type: 'bar',
+                                                    x: ['Eye Contact', 'Attentiveness', 'Engagement', 'Confidence'],
+                                                    y: [
+                                                        report.visualAnalytics.eye_contact_percentage, 
+                                                        report.visualAnalytics.presence_percentage, 
+                                                        report.visualAnalytics.engagement_percentage, 
+                                                        report.visualAnalytics.confidence_score
+                                                    ],
+                                                    marker: { color: ['#3b82f6', '#6366f1', '#a855f7', '#ec4899'] }
+                                                }
+                                            ]}
+                                            layout={{ 
+                                                width: 400, 
+                                                height: 300, 
+                                                margin: { t: 10, b: 30, l: 30, r: 10 },
+                                                paper_bgcolor: 'rgba(0,0,0,0)',
+                                                plot_bgcolor: 'rgba(0,0,0,0)',
+                                                yaxis: { range: [0, 100] }
+                                            }}
+                                            config={{ displayModeBar: false }}
+                                        />
+                                    </div>
+                                    
+                                    <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
+                                        <h4 className="text-xl font-bold text-gray-800 mb-6">Dominant Emotion Summary</h4>
+                                        {report.visualAnalytics.dominant_emotions && Object.keys(report.visualAnalytics.dominant_emotions).length > 0 ? (
+                                            <Plot
+                                                data={[
+                                                    {
+                                                        type: 'pie',
+                                                        labels: Object.keys(report.visualAnalytics.dominant_emotions),
+                                                        values: Object.values(report.visualAnalytics.dominant_emotions),
+                                                        hole: 0.4,
+                                                        marker: { 
+                                                            colors: ['#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#64748b', '#d946ef'] 
+                                                        }
+                                                    }
+                                                ]}
+                                                layout={{ 
+                                                    width: 400, 
+                                                    height: 300, 
+                                                    margin: { t: 10, b: 10, l: 10, r: 10 },
+                                                    paper_bgcolor: 'rgba(0,0,0,0)',
+                                                }}
+                                                config={{ displayModeBar: false }}
+                                            />
+                                        ) : (
+                                            <div className="h-full flex items-center justify-center text-gray-400">
+                                                No emotion data available
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </main>

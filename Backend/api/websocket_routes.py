@@ -7,6 +7,9 @@ import re
 
 from database.connection import get_database
 from services.interview_service import InterviewService
+from com_vision_agent.Engagement import ComputerVisionAgent
+
+cv_agents_by_session: Dict[str, ComputerVisionAgent] = {}
 
 router = APIRouter(prefix="/ws", tags=["Interview WebSockets"])
 
@@ -101,7 +104,9 @@ async def process_llm_and_tts(session_id: str, input_text: str, service: Intervi
                 "type": "interview_concluding",
                 "payload": "Calculating results..."
             })
-            report_dict = await service.finalize_interview(session_id)
+            cv_agent = cv_agents_by_session.get(session_id)
+            cv_metrics = cv_agent.get_session_metrics() if cv_agent else None
+            report_dict = await service.finalize_interview(session_id, cv_metrics=cv_metrics)
             await web_manager.send_json(session_id, {
                 "type": "report",
                 "payload": report_dict
@@ -117,6 +122,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     current_generation_task = None
     
     try:
+        cv_agents_by_session[session_id] = ComputerVisionAgent()
+        
         while True:
             data = await websocket.receive_text()
             
@@ -125,7 +132,17 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 msg_type = message.get("type")
                 payload = message.get("payload")
                 
-                if msg_type in ["audio_data", "text_data", "start_interview"]:
+                if msg_type == "video_frame":
+                    cv_agent = cv_agents_by_session.get(session_id)
+                    if cv_agent:
+                        notify = await cv_agent.process_frame(payload)
+                        if notify:
+                            await manager.send_json(session_id, {
+                                "type": "cv_notification",
+                                "payload": "Please maintain eye contact with the screen."
+                            })
+                            
+                elif msg_type in ["audio_data", "text_data", "start_interview"]:
                     transcription = ""
                     
                     if msg_type == "audio_data":
@@ -169,12 +186,24 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         manager.disconnect(session_id)
         if current_generation_task and not current_generation_task.done():
             current_generation_task.cancel()
+        
+        cv_agent = cv_agents_by_session.get(session_id)
+        cv_metrics = cv_agent.get_session_metrics() if cv_agent else None
+        
         # Ensure interview is finalized on disconnect if not already done
-        asyncio.create_task(service.finalize_interview(session_id))
+        asyncio.create_task(service.finalize_interview(session_id, cv_metrics=cv_metrics))
+        if session_id in cv_agents_by_session:
+            del cv_agents_by_session[session_id]
     except Exception as e:
         import traceback
         traceback.print_exc()
         manager.disconnect(session_id)
         if current_generation_task and not current_generation_task.done():
             current_generation_task.cancel()
-        asyncio.create_task(service.finalize_interview(session_id))
+            
+        cv_agent = cv_agents_by_session.get(session_id)
+        cv_metrics = cv_agent.get_session_metrics() if cv_agent else None
+        
+        asyncio.create_task(service.finalize_interview(session_id, cv_metrics=cv_metrics))
+        if session_id in cv_agents_by_session:
+            del cv_agents_by_session[session_id]
