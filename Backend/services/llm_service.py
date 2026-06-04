@@ -42,7 +42,7 @@ class LLMService:
             messages=messages,
             model=self.model,
             stream=True,
-            temperature=0.6
+            temperature=0.4
         )
         
         async for chunk in stream:
