@@ -320,7 +320,7 @@ class InterviewService:
             cv_metrics["created_at"] = datetime.utcnow()
             await self.db.candidate_visual_analysis.insert_one(cv_metrics)
             
-            interview_score = (interview_performance_score * 0.70) + (visual_intelligence_score * 0.30)
+            interview_score = (interview_performance_score * 0.90) + (visual_intelligence_score * 0.10)
         else:
             interview_score = interview_performance_score
         
