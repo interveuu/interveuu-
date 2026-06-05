@@ -43,7 +43,7 @@ numpy
 mediapipe
 deepface
 tensorflow
-
+tf-keras
 
 websockets
 pydantic
