@@ -1,56 +1,18 @@
 import cv2
 import threading
 import time
-from collections import deque
+import base64
 import numpy as np
 from deepface import DeepFace
 import mediapipe as mp
+import asyncio
 
 # ------- PARAMETERS (tune these) -------
-WINDOW_SECONDS = 3.0         # sliding window for attentiveness (seconds). Smaller -> faster response.
-DETECT_INTERVAL = 12         # run DeepFace every N frames (adjust for speed)
 EYE_CONTACT_THRESH = 0.035   # threshold for simple head/eye alignment check
+EMOTION_THROTTLE_SECONDS = 3.0 # Only analyze emotion every N seconds
+LOOK_AWAY_NOTIFICATION_SECONDS = 8.0 # Notify if looked away for N continuous seconds
+NOTIFICATION_COOLDOWN = 30.0 # Only notify once every 30 seconds
 # ---------------------------------------
-
-# Mediapipe setup
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True, max_num_faces=1)
-
-# Video capture
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    raise RuntimeError("Unable to open camera")
-
-# Shared state (thread-safe access via lock)
-dominant_emotion = "Detecting..."
-lock = threading.Lock()
-analyzing = False  # flag to avoid concurrent deepface threads
-
-# Time-window deques
-total_frame_times = deque()   # timestamps of frames (all frames) within window
-face_frame_times = deque()    # timestamps of frames where face was present within window
-
-# Helper to purge old timestamps older than window
-def purge_old(deq, now, window_seconds):
-    cutoff = now - window_seconds
-    while deq and deq[0] < cutoff:
-        deq.popleft()
-
-def analyze_emotion_thread(face_crop):
-    """Background thread to run DeepFace on cropped face image."""
-    global dominant_emotion, analyzing
-    try:
-        # mark analyzing
-        analyzing = True
-        # run DeepFace (enforce_detection False because we already have crop)
-        res = DeepFace.analyze(face_crop, actions=['emotion'], enforce_detection=False, detector_backend='mediapipe')
-        with lock:
-            dominant_emotion = res[0].get('dominant_emotion', dominant_emotion)
-    except Exception as e:
-        # keep previous emotion on error, optionally print
-        print("DeepFace error:", e)
-    finally:
-        analyzing = False
 
 def landmarks_to_bbox(landmarks, w, h, pad=0.2):
     """Compute bounding box for face mesh landmarks with padding (normalized -> px)."""
@@ -67,7 +29,6 @@ def estimate_eye_contact(landmarks):
     Simple heuristic: compare center of eyes vs nose x-position.
     Returns True if within threshold -> looking forward.
     """
-    # Mediapipe face mesh landmark indices (approx)
     LEFT_EYE = [33, 133]    # outer/inner
     RIGHT_EYE = [362, 263]
     NOSE_TIP = 1
@@ -80,96 +41,162 @@ def estimate_eye_contact(landmarks):
     diff = abs(center_eyes - nose_x)
     return diff < EYE_CONTACT_THRESH
 
-# Main loop
-frame_idx = 0
-eye_contact_str = "Unknown"
-engagement_score = 0
-attentiveness_pct = 0
+class ComputerVisionAgent:
+    def __init__(self):
+        # Mediapipe setup
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = self.mp_face_mesh.FaceMesh(refine_landmarks=True, max_num_faces=1)
+        
+        # State
+        self.total_frames_processed = 0
+        self.frames_with_face = 0
+        self.frames_with_eye_contact = 0
+        
+        self.look_away_events = 0
+        self.long_look_away_events = 0
+        
+        # Tracking look aways
+        self.is_looking_away = False
+        self.look_away_start_time = 0
+        self.last_notification_time = 0
+        
+        # Emotion tracking
+        self.dominant_emotions_count = {
+            "happy": 0, "sad": 0, "angry": 0, "fear": 0, "surprise": 0, "neutral": 0, "disgust": 0
+        }
+        self.last_emotion_analysis_time = 0
+        self.analyzing_emotion = False
+        self.lock = threading.Lock()
 
-try:
-    while True:
-        t0 = time.time()
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frame_idx += 1
+    def decode_base64_frame(self, base64_string):
+        img_data = base64.b64decode(base64_string)
+        np_arr = np.frombuffer(img_data, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        return frame
 
-        # Convert to RGB and process with Mediapipe
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(frame_rgb)
+    def analyze_emotion_thread(self, face_crop):
+        try:
+            with self.lock:
+                self.analyzing_emotion = True
+                
+            res = DeepFace.analyze(face_crop, actions=['emotion'], enforce_detection=False, detector_backend='mediapipe')
+            dominant_emotion = res[0].get('dominant_emotion')
+            
+            with self.lock:
+                if dominant_emotion in self.dominant_emotions_count:
+                    self.dominant_emotions_count[dominant_emotion] += 1
+                else:
+                    self.dominant_emotions_count[dominant_emotion] = 1
+        except Exception as e:
+            pass
+        finally:
+            with self.lock:
+                self.analyzing_emotion = False
 
-        now = time.time()
-        # append this frame's timestamp to total frames deque
-        total_frame_times.append(now)
-        purge_old(total_frame_times, now, WINDOW_SECONDS)
-        purge_old(face_frame_times, now, WINDOW_SECONDS)
+    async def process_frame(self, base64_image: str) -> bool:
+        """
+        Process a single frame.
+        Returns True if a notification should be sent to the frontend.
+        """
+        try:
+            frame = self.decode_base64_frame(base64_image)
+            if frame is None:
+                return False
+                
+            self.total_frames_processed += 1
+            now = time.time()
+            
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.face_mesh.process(frame_rgb)
+            
+            face_present = False
+            eye_contact_bool = False
+            face_crop = None
+            
+            if results.multi_face_landmarks:
+                face_present = True
+                self.frames_with_face += 1
+                face_landmarks = results.multi_face_landmarks[0].landmark
+                ih, iw, _ = frame.shape
+                
+                try:
+                    eye_contact_bool = estimate_eye_contact(face_landmarks)
+                except Exception:
+                    eye_contact_bool = False
+                    
+                if eye_contact_bool:
+                    self.frames_with_eye_contact += 1
+                    
+                x1, y1, x2, y2 = landmarks_to_bbox(face_landmarks, iw, ih, pad=0.25)
+                if x2 - x1 > 20 and y2 - y1 > 20:
+                    face_crop = frame[y1:y2, x1:x2].copy()
+                    
+            # Look Away Logic
+            # Consider "looking away" if face is missing or no eye contact
+            looking_away_now = not face_present or not eye_contact_bool
+            
+            if looking_away_now and not self.is_looking_away:
+                self.is_looking_away = True
+                self.look_away_start_time = now
+                self.look_away_events += 1
+            elif not looking_away_now and self.is_looking_away:
+                self.is_looking_away = False
+                
+            notify_frontend = False
+            if self.is_looking_away:
+                duration = now - self.look_away_start_time
+                if duration >= LOOK_AWAY_NOTIFICATION_SECONDS:
+                    if (now - self.last_notification_time) >= NOTIFICATION_COOLDOWN:
+                        notify_frontend = True
+                        self.last_notification_time = now
+                        self.long_look_away_events += 1
+                        
+            # Emotion Analysis Trigger
+            with self.lock:
+                is_analyzing = self.analyzing_emotion
+                
+            if face_present and face_crop is not None and not is_analyzing:
+                if (now - self.last_emotion_analysis_time) >= EMOTION_THROTTLE_SECONDS:
+                    self.last_emotion_analysis_time = now
+                    t = threading.Thread(target=self.analyze_emotion_thread, args=(face_crop,), daemon=True)
+                    t.start()
+                    
+            return notify_frontend
+            
+        except Exception as e:
+            print(f"CV Agent Error: {e}")
+            return False
 
-        face_present = False
-        eye_contact_bool = False
-        face_crop = None
-
-        if results.multi_face_landmarks:
-            # We only handle first face (max_num_faces=1)
-            face_present = True
-            face_landmarks = results.multi_face_landmarks[0].landmark
-            ih, iw, _ = frame.shape
-
-            # estimate eye contact
-            try:
-                eye_contact_bool = estimate_eye_contact(face_landmarks)
-                eye_contact_str = "looking at screen" if eye_contact_bool else "Away"
-            except Exception:
-                eye_contact_str = "Unknown"
-                eye_contact_bool = False
-
-            # mark face present in deque
-            face_frame_times.append(now)
-
-            # crop the face region for DeepFace (use landmarks bbox)
-            x1, y1, x2, y2 = landmarks_to_bbox(face_landmarks, iw, ih, pad=0.25)
-            # ensure reasonable bbox size
-            if x2 - x1 > 20 and y2 - y1 > 20:
-                face_crop = frame[y1:y2, x1:x2].copy()
-
-            # optionally draw landmark bbox
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
+    def get_session_metrics(self):
+        """Calculate and return final metrics for the session"""
+        presence_percentage = (self.frames_with_face / self.total_frames_processed * 100) if self.total_frames_processed > 0 else 0
+        eye_contact_percentage = (self.frames_with_eye_contact / self.total_frames_processed * 100) if self.total_frames_processed > 0 else 0
+        engagement_percentage = (presence_percentage * 0.5) + (eye_contact_percentage * 0.5)
+        
+        # Calculate Confidence Score from emotions
+        # Confident emotions: happy, neutral. Stress: fear, sad, angry, disgust.
+        total_emotions = sum(self.dominant_emotions_count.values())
+        if total_emotions > 0:
+            confident_count = self.dominant_emotions_count.get("happy", 0) + self.dominant_emotions_count.get("neutral", 0)
+            confidence_score = (confident_count / total_emotions) * 100
         else:
-            eye_contact_str = "Away"
+            confidence_score = 50.0 # default neutral
 
-        # Purge old timestamps again (keeps window clean)
-        purge_old(total_frame_times, now, WINDOW_SECONDS)
-        purge_old(face_frame_times, now, WINDOW_SECONDS)
-
-        # Compute attentiveness: fraction of frames with face in window
-        total_count = len(total_frame_times)
-        face_count = len(face_frame_times)
-        attentiveness_pct = int((face_count / total_count) * 100) if total_count > 0 else 0
-
-        # Compute engagement: mix of presence ratio and current eye-contact
-        presence_ratio = (face_count / total_count) if total_count > 0 else 0.0
-        engagement_score = int((presence_ratio * 0.5 + (1.0 if eye_contact_bool else 0.0) * 0.5) * 100)
-
-        # Trigger DeepFace (only if face detected, crop available, and not already analyzing)
-        if (frame_idx % DETECT_INTERVAL == 0) and face_crop is not None and (not analyzing):
-            # spawn background analysis thread (daemon so it won't block exit)
-            t = threading.Thread(target=analyze_emotion_thread, args=(face_crop,), daemon=True)
-            t.start()
-
-        # Draw overlay values (read dominant_emotion under lock)
-        with lock:
-            disp_emotion = dominant_emotion
-
-        cv2.putText(frame, f"Emotion: {disp_emotion}", (16, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 0), 2)
-        cv2.putText(frame, f"Eye Contact: {eye_contact_str}", (16, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 200), 2)
-        cv2.putText(frame, f"Engagement: {engagement_score}%", (16, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 200, 0), 2)
-        cv2.putText(frame, f"Attentiveness (last {int(WINDOW_SECONDS)}s): {attentiveness_pct}%", (16, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 100, 0), 2)
-
-        cv2.imshow("Interveuu - Interview Analyzer", frame)
-
-        # quick sleep to avoid 100% CPU if needed (useful on some machines)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-finally:
-    cap.release()
-    cv2.destroyAllWindows()
+        # Calculate base 100-scale scores for DB
+        eye_contact_score = eye_contact_percentage
+        attentiveness_score = presence_percentage
+        engagement_score = engagement_percentage
+        
+        return {
+            "eye_contact_score": round(eye_contact_score, 2),
+            "attentiveness_score": round(attentiveness_score, 2),
+            "engagement_score": round(engagement_score, 2),
+            "confidence_score": round(confidence_score, 2),
+            "eye_contact_percentage": round(eye_contact_percentage, 2),
+            "presence_percentage": round(presence_percentage, 2),
+            "engagement_percentage": round(engagement_percentage, 2),
+            "look_away_events": self.look_away_events,
+            "long_look_away_events": self.long_look_away_events,
+            "dominant_emotions": self.dominant_emotions_count,
+            "total_frames_processed": self.total_frames_processed
+        }

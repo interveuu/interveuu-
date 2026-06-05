@@ -212,6 +212,17 @@ async def get_candidate_report(
                 "percentage": int(skill_score),
                 "color": _get_skill_color(skill_name)
             })
+            
+    # Fetch visual analytics
+    visual_analytics = None
+    if session_id:
+        visual_data = await db.candidate_visual_analysis.find_one({"interview_id": session_id})
+        if visual_data:
+            # Convert ObjectId and datetime to string to avoid JSON serialization issues
+            visual_data["_id"] = str(visual_data["_id"])
+            if "created_at" in visual_data:
+                visual_data["created_at"] = visual_data["created_at"].isoformat()
+            visual_analytics = visual_data
     
     return {
         "candidateName": ranking["candidate_name"],
@@ -236,7 +247,8 @@ async def get_candidate_report(
         "manualEndDetected": ranking.get("manual_end_detected", False) or ranking.get("interview_status") == "Manually Ended",
         "email": email,
         "phone": phone,
-        "linkedin": linkedin
+        "linkedin": linkedin,
+        "visualAnalytics": visual_analytics
     }
 
 
