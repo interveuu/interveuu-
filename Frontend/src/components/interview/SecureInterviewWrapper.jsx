@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import PreInterviewModal from './PreInterviewModal';
 
 const SecureInterviewWrapper = ({ sessionId, candidateId, onTerminate, onStart, children }) => {
     const [isInterviewActive, setIsInterviewActive] = useState(false);
@@ -8,6 +10,7 @@ const SecureInterviewWrapper = ({ sessionId, candidateId, onTerminate, onStart, 
 
     const MAX_VIOLATIONS = 3;
     const containerRef = useRef(null);
+    const navigate = useNavigate();
 
     const reportViolationToBackend = useCallback(async (reason) => {
         // In a real scenario, this would post to a FastAPI endpoint
@@ -134,19 +137,12 @@ const SecureInterviewWrapper = ({ sessionId, candidateId, onTerminate, onStart, 
             style={{ userSelect: 'none' }}
         >
             {!isInterviewActive ? (
-                <div className="flex flex-col items-center justify-center flex-1 text-center p-6">
-                    <h1 className="text-3xl font-bold mb-4">Ready for your AI Interview?</h1>
-                    <p className="mb-8 text-gray-600 max-w-md">
-                        This interview requires fullscreen mode. Exiting fullscreen, switching tabs, or losing window focus is strictly monitored and may lead to termination.
-                    </p>
-                    <button
-                        onClick={startInterview}
-                        disabled={isStarting}
-                        className={`px-6 py-3 text-lg font-semibold text-white rounded-lg shadow-md transition ${isStarting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-                    >
-                        {isStarting ? "Requesting Permissions..." : "Start Interview"}
-                    </button>
-                </div>
+                <PreInterviewModal 
+                    isOpen={true} 
+                    isLoading={isStarting}
+                    onStart={startInterview} 
+                    onBack={() => navigate('/candidate/jobs')} 
+                />
             ) : (
                 <div className="w-full h-full flex flex-col flex-1 relative">
                     {showWarning && (
