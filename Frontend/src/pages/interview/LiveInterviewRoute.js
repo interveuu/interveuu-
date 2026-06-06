@@ -7,7 +7,7 @@ import LiveInterviewSession from "../../components/interview/LiveInterviewSessio
 import AudioRecorder from "../../components/interview/AudioRecorder";
 import SecureInterviewWrapper from "../../components/interview/SecureInterviewWrapper";
 import { conversationStateMachine, ConversationState } from "../../services/ConversationStateMachine";
-import API_BASE_URL from "../../apiConfig";
+import API_BASE_URL, { BACKEND_URL } from "../../apiConfig";
 
 // Create a single, persistent audio element perfectly synced with VoiceSpectrum.
 // This guarantees we never have to disconnect/reconnect the WebAudio AnalyserNode.
@@ -106,9 +106,9 @@ const LiveInterviewRoute = () => {
             if (ws.current || isConnecting.current) return;
             isConnecting.current = true;
 
-            // Derive WebSocket URL from API_BASE_URL by stripping '/api' proxy path if present
-            const rootUrl = API_BASE_URL.replace(/\/api\/?$/, "");
-            const wsUrl = `${rootUrl.replace(/^http/, 'ws')}/ws/interview/${sessionId}`;
+            // Use BACKEND_URL for WebSocket (Vercel rewrites don't support WebSocket)
+            const wsUrl = `${BACKEND_URL.replace(/^http/, 'ws')}/ws/interview/${sessionId}`;
+            console.log("[WS] Connecting to:", wsUrl);
             const socket = new WebSocket(wsUrl);
 
             socket.onopen = () => {

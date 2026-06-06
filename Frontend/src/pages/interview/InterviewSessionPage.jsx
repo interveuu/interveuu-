@@ -6,7 +6,7 @@ import DebugPanel from '../../components/interview/DebugPanel';
 import { conversationStateMachine, ConversationState } from '../../services/ConversationStateMachine';
 import CandidateDashboard from '../../components/interview/CandidateDashboard';
 import SecureInterviewWrapper from '../../components/interview/SecureInterviewWrapper';
-import API_BASE_URL from '../../apiConfig';
+import API_BASE_URL, { BACKEND_URL } from '../../apiConfig';
 
 function App() {
   const [currentState, setCurrentState] = useState(ConversationState.IDLE);
@@ -109,9 +109,8 @@ function App() {
       isConnecting.current = true;
       logDebug('🔌 Connecting...');
 
-      // Derive WebSocket URL by stripping '/api' path if present
-      const rootUrl = API_BASE_URL.replace(/\/api\/?$/, "");
-      const wsUrl = rootUrl.replace(/^http/, 'ws') + '/ws/interview';
+      // Use BACKEND_URL for WebSocket (Vercel rewrites don't support WebSocket)
+      const wsUrl = BACKEND_URL.replace(/^http/, 'ws') + '/ws/interview';
       const socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {

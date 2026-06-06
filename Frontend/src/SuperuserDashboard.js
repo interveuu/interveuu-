@@ -5,10 +5,10 @@ import {
     ShieldCheck, LayoutDashboard, Activity, Users, Briefcase, LogOut,
     Clock, FileText, Search, Zap, Globe, DollarSign, BarChart3, UserCheck
 } from "lucide-react";
-import API_BASE_URL from "./apiConfig";
+import API_BASE_URL, { BACKEND_URL } from "./apiConfig";
 import Logo from "./components/Logo";
 
-const WS_BASE = API_BASE_URL.replace(/^http/, "ws").replace("/api", "");
+const WS_BASE = BACKEND_URL.replace(/^http/, "ws");
 
 const SidebarLink = ({ to, icon: Icon, label }) => (
     <NavLink to={to}
