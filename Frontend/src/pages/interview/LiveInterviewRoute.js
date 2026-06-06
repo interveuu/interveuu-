@@ -107,7 +107,7 @@ const LiveInterviewRoute = () => {
             isConnecting.current = true;
 
             // Use BACKEND_URL for WebSocket (Vercel rewrites don't support WebSocket)
-            const wsUrl = `${BACKEND_URL.replace(/^http/, 'ws')}/ws/interview/${sessionId}`;
+            const wsUrl = `${BACKEND_URL.replace(/\/+$/, "").replace(/^http/, 'ws')}/ws/interview/${sessionId}`;
             console.log("[WS] Connecting to:", wsUrl);
             const socket = new WebSocket(wsUrl);
 

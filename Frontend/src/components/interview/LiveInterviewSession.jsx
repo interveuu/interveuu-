@@ -24,7 +24,18 @@ import VoiceSpectrum from '../VoiceSpectrum';
 
 // Premium Sync-driven Caption Component
 const LiveCaption = ({ captionObj, isVisible, isDarkMode }) => {
-    const hasContent = captionObj && captionObj.words && captionObj.words.length > 0;
+    let words = [];
+    let activeIndex = -1;
+    
+    if (typeof captionObj === 'string') {
+        words = captionObj.split(' ').filter(w => w.length > 0);
+        activeIndex = words.length - 1;
+    } else if (captionObj && Array.isArray(captionObj.words)) {
+        words = captionObj.words;
+        activeIndex = captionObj.activeIndex;
+    }
+    
+    const hasContent = words.length > 0;
     
     return (
         <div
@@ -37,12 +48,12 @@ const LiveCaption = ({ captionObj, isVisible, isDarkMode }) => {
                 ${isDarkMode ? 'bg-black/60 border-gray-700/50' : 'bg-white/85 border-white/60'}`}
             >
                 <div className={`text-lg sm:text-xl md:text-[22px] font-medium leading-[1.6] tracking-tight ${isDarkMode ? 'text-[#E5E7EB]' : 'text-[#111827]'} font-sans`}>
-                    {hasContent ? captionObj.words.map((word, idx) => {
-                        const isActive = idx === captionObj.activeIndex;
-                        const isPast = idx < captionObj.activeIndex;
+                    {hasContent ? words.map((word, idx) => {
+                        const isActive = idx === activeIndex;
+                        const isPast = idx < activeIndex;
                         
                         // Smart Grouping: Fade out lines far behind
-                        if (captionObj.activeIndex - idx > 12) return null; // Hide far past words
+                        if (activeIndex - idx > 12) return null; // Hide far past words
                         
                         let opacityClass = 'opacity-[0.15]';
                         let glowClass = '';

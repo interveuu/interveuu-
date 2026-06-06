@@ -44,8 +44,12 @@ def estimate_eye_contact(landmarks):
 class ComputerVisionAgent:
     def __init__(self):
         # Mediapipe setup
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(refine_landmarks=True, max_num_faces=1)
+        try:
+            self.mp_face_mesh = mp.solutions.face_mesh
+            self.face_mesh = self.mp_face_mesh.FaceMesh(refine_landmarks=True, max_num_faces=1)
+        except Exception as e:
+            print(f"Warning: Failed to initialize Mediapipe FaceMesh: {e}")
+            self.face_mesh = None
         
         # State
         self.total_frames_processed = 0
@@ -99,6 +103,8 @@ class ComputerVisionAgent:
         Returns True if a notification should be sent to the frontend.
         """
         try:
+            if self.face_mesh is None:
+                return False
             frame = self.decode_base64_frame(base64_image)
             if frame is None:
                 return False
