@@ -1,7 +1,7 @@
 services:
   # Backend: FastAPI Web Service (Dockerized)
   - type: web
-    name: recrubotx-backend
+    name: interveuu-backend
     runtime: docker
     rootDir: Backend
     plan: starter # Docker requires at least the starter plan on Render for some features, but let's keep it simple
@@ -9,7 +9,7 @@ services:
       - key: MONGODB_URL
         sync: false # Set manually in Render dashboard
       - key: MONGODB_DB_NAME
-        value: recrubotx
+        value: interveuu
       - key: MONGODB_STRICT_STARTUP
         value: "true"
       - key: GEMINI_API_KEY
@@ -17,7 +17,7 @@ services:
       - key: DEEPGRAM_API_KEY
         sync: false # Set manually in Render dashboard
       - key: ALLOWED_ORIGINS
-        value: https://recrubotx.vercel.app,https://recrubotx.onrender.com
+        value: https://interveuu.vercel.app,https://interveuu.onrender.com
       - key: PORT
         value: 10000
       - key: APP_ENV
@@ -31,17 +31,17 @@ services:
       - key: EMAIL_FROM_EMAIL
         sync: false # Set manually in Render dashboard
       - key: EMAIL_FROM_NAME
-        value: RecruBotX
+        value: Interveuu
 
       # Optional alternative provider
       - key: RESEND_API_KEY
         sync: false # Set manually in Render dashboard
       - key: RESEND_FROM
-        value: RecruBotX <onboarding@resend.dev>
+        value: Interveuu <onboarding@resend.dev>
 
   # Frontend: React Static Site
   - type: web
-    name: recrubotx-frontend
+    name: interveuu-frontend
     runtime: static
     rootDir: Frontend
     buildCommand: npm install && npm run build
@@ -56,4 +56,4 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        value: https://recrubotx.onrender.com/api # Change to your actual backend URL
+        value: https://interveuu.onrender.com/api

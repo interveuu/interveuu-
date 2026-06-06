@@ -35,7 +35,7 @@ app = FastAPI(
 # Configure CORS
 origins = os.getenv(
     "ALLOWED_ORIGINS", 
-    "http://localhost:3000,http://127.0.0.1:3000,https://interveuu.vercel.app,https://green-coast-0ded80d00.4.azurestaticapps.net"
+    "http://localhost:3000,http://127.0.0.1:3000,https://interveuu.vercel.app,https://interveuu.onrender.com"
 ).split(",")
 
 app.add_middleware(
