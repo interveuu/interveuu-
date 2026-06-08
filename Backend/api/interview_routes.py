@@ -249,17 +249,7 @@ async def start_demo_interview(
                 service = InterviewService(db_manager.db)
         except Exception as e:
             print(f"Error getting interview service: {e}")
-            # Return a simple response to allow frontend to proceed
-            return {
-                "success": True,
-                "message": "Demo Interview sequence initiated",
-                "session_id": session_id,
-                "candidate_name": candidate_name,
-                "job_title": job_title,
-                "question": f"Hello {candidate_name}! Welcome to the Interveuu demo interview. Let's start with a quick introduction. Could you tell me about your background and why you're interested in this {job_title} position?",
-                "total_questions": 3,
-                "current_question": 1
-            }
+            raise HTTPException(status_code=500, detail="Failed to initialize interview service")
         
         try:
             # Initialize the session
@@ -267,8 +257,11 @@ async def start_demo_interview(
             
             # Get the first question
             full_response = ""
-            async for chunk in service.process_input(new_session_id, "INIT"):
-                full_response += chunk
+            try:
+                async for chunk in service.process_input(new_session_id, "INIT"):
+                    full_response += chunk
+            except Exception as input_err:
+                print(f"Initial AI response error: {input_err}")
             
             return {
                 "success": True,
@@ -282,33 +275,13 @@ async def start_demo_interview(
             }
         except Exception as service_error:
             print(f"Service initialization error: {service_error}")
-            # Still return success with a fallback question
-            return {
-                "success": True,
-                "message": "Demo Interview sequence initiated",
-                "session_id": session_id,
-                "candidate_name": candidate_name,
-                "job_title": job_title,
-                "question": f"Hello {candidate_name}! Welcome to the Interveuu demo interview for the {job_title} position. Let's start with a quick introduction. Could you tell me about your background?",
-                "total_questions": 3,
-                "current_question": 1
-            }
+            raise HTTPException(status_code=500, detail="Failed to initialize demo interview session. Make sure MongoDB is running locally.")
             
     except Exception as e:
         import traceback
         print(f"Demo interview error: {str(e)}")
         traceback.print_exc()
-        # Return a basic success response to keep UX flowing
-        return {
-            "success": True,
-            "message": "Demo Interview sequence initiated",
-            "session_id": str(uuid.uuid4()),
-            "candidate_name": candidate_name,
-            "job_title": job_title,
-            "question": f"Hello {candidate_name}! Let's begin the interview for the {job_title} position. Could you start by telling me about yourself?",
-            "total_questions": 3,
-            "current_question": 1
-        }
+        raise HTTPException(status_code=500, detail="An error occurred while starting the demo interview. Please check server logs and ensure MongoDB is running.")
 
 
 @router.post("/next-question")

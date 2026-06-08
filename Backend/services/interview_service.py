@@ -104,7 +104,8 @@ class InterviewService:
         session_data = await self.get_session(session_id)
         
         if not session_data:
-            yield "Error: Session not found."
+            db_status = "Connected" if self.db is not None else "Disconnected"
+            yield f"Error: Session not found in database. ID: {session_id}. DB: {db_status}."
             return
             
         session, context = session_data
