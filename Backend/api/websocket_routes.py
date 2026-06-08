@@ -68,15 +68,6 @@ async def process_llm_and_tts(session_id: str, input_text: str, service: Intervi
         async for chunk in service.process_input(session_id, input_text):
             await web_manager.send_json(session_id, {"type": "text_chunk", "payload": chunk})
             buffer += chunk
-            
-            # Extract sentences safely (. ? ! optionally with quotes/spaces)
-            match = re.search(r'(.*?[\.\!\?]+)(?:\s+|$)', buffer)
-            while match:
-                sentence = match.group(1).strip()
-                buffer = buffer[match.end():]
-                if len(sentence) > 3:
-                    queue.put_nowait(sentence)
-                match = re.search(r'(.*?[\.\!\?]+)(?:\s+|$)', buffer)
                 
         if buffer.strip():
             queue.put_nowait(buffer.strip())
