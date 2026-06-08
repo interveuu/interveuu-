@@ -39,38 +39,51 @@ const LiveCaption = ({ captionObj, isVisible, isDarkMode }) => {
     
     return (
         <div
-            className={`transition-all duration-[400ms] ease-out transform max-w-3xl w-full mx-auto
-                ${isVisible && hasContent ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
+            className={`transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] transform max-w-4xl w-full mx-auto px-4
+                ${isVisible && hasContent ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}
             `}
         >
-            <div 
-                className={`py-3 px-5 md:py-4 md:px-6 rounded-[16px] backdrop-blur-xl border transition-colors duration-300 shadow-[0_8px_30px_rgba(0,0,0,0.12)] max-w-[85%] sm:max-w-xl md:max-w-2xl mx-auto text-center
-                ${isDarkMode ? 'bg-black/60 border-gray-700/50' : 'bg-white/85 border-white/60'}`}
-            >
-                <div className={`text-lg sm:text-xl md:text-[22px] font-medium leading-[1.6] tracking-tight ${isDarkMode ? 'text-[#E5E7EB]' : 'text-[#111827]'} font-sans`}>
+            <div className="text-center font-sans">
+                <div 
+                    className={`text-xl sm:text-2xl md:text-3xl font-medium leading-[1.4] tracking-tight ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
+                    style={{ textWrap: 'balance' }}
+                >
+                    <AnimatePresence mode="popLayout">
                     {hasContent ? words.map((word, idx) => {
                         const isActive = idx === activeIndex;
-                        const isPast = idx < activeIndex;
+                        const distance = activeIndex - idx;
                         
-                        // Smart Grouping: Fade out lines far behind
-                        if (activeIndex - idx > 12) return null; // Hide far past words
+                        // Keep a sliding window of words like Gemini Live
+                        if (distance > 12) return null; 
                         
-                        let opacityClass = 'opacity-[0.15]';
-                        let glowClass = '';
+                        // Calculate gradient fade for older words
+                        let opacity = 1;
+                        if (distance > 6) opacity = 0.8;
+                        if (distance > 9) opacity = 0.4;
                         
-                        if (isActive) {
-                            opacityClass = 'opacity-100 font-semibold';
-                            glowClass = isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'drop-shadow-[0_0_1px_rgba(0,0,0,0.6)]';
-                        } else if (isPast) {
-                            opacityClass = 'opacity-60';
-                        }
-                        
+                        const colorClass = isActive 
+                            ? (isDarkMode ? 'text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]' : 'text-black drop-shadow-[0_0_15px_rgba(0,0,0,0.15)]')
+                            : (isDarkMode ? 'text-gray-300' : 'text-gray-700');
+
                         return (
-                            <span key={idx} className={`inline-block mx-[3px] transition-all duration-[150ms] ${opacityClass} ${glowClass}`}>
+                            <motion.span 
+                                key={idx} 
+                                initial={{ opacity: 0, y: 10, filter: 'blur(8px)' }}
+                                animate={{ 
+                                    opacity: opacity, 
+                                    y: 0, 
+                                    filter: 'blur(0px)',
+                                    scale: isActive ? 1.02 : 1 
+                                }}
+                                exit={{ opacity: 0, filter: 'blur(4px)', scale: 0.9 }}
+                                transition={{ duration: 0.4, ease: "easeOut" }}
+                                className={`inline-block mx-[5px] transition-colors duration-300 ${colorClass}`}
+                            >
                                 {word}
-                            </span>
+                            </motion.span>
                         );
                     }) : null}
+                    </AnimatePresence>
                 </div>
             </div>
         </div>
@@ -390,7 +403,7 @@ const LiveInterviewSession = ({
                 </div>
 
                 {/* Right Side - Spectrum & Main Focus */}
-                <div className="flex-1 flex flex-col justify-center items-center relative py-12">
+                <div className="flex-1 flex flex-col justify-center items-center relative pt-56 lg:pt-72 pb-12">
                    
                    {!isTranscriptVisible && (
                         <button
@@ -415,26 +428,44 @@ const LiveInterviewSession = ({
                         </div>
                     </div>
 
-                    <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="absolute top-12 lg:top-[15%] text-center w-full px-4 z-40 pointer-events-none"
-                    >
-                        <h3 className={`text-2xl font-semibold tracking-tight mb-3 drop-shadow-sm inline-block px-6 py-2 rounded-full backdrop-blur-md border transition-colors duration-300 ${isDarkMode ? 'text-[#E5E7EB] bg-[#111827]/40 border-gray-700/50' : 'text-[#111827] bg-white/40 border-white/50'}`}>
-                            {isAiSpeaking ? "Interviewer speaking..." : isListening ? "Listening to you..." : "Analyzing..."}
-                        </h3>
-                        {/* Live Caption mapped correctly directly beneath title */}
-                        <div className="min-h-[6rem] flex items-center justify-center w-full relative z-40">
-                            <LiveCaption captionObj={liveCaption} isVisible={isAiSpeaking} isDarkMode={isDarkMode} />
-                        </div>
-                    </motion.div>
+                    {/* Elegant Minimal Indicator (Above Spectrum) */}
+                    <div className={`flex items-center gap-3 px-5 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all duration-500 z-40 mt-4 lg:mt-8 mb-8 lg:mb-12 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'}`}>
+                        {isAiSpeaking ? (
+                            <>
+                                <div className="flex gap-1.5 items-center">
+                                    <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-[#4F8CFF]' : 'bg-[#3A7DFF]'}`} style={{ animationDelay: '0ms' }} />
+                                    <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-[#4F8CFF]' : 'bg-[#3A7DFF]'}`} style={{ animationDelay: '150ms' }} />
+                                    <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-[#4F8CFF]' : 'bg-[#3A7DFF]'}`} style={{ animationDelay: '300ms' }} />
+                                </div>
+                                <span className={`text-[11px] font-bold tracking-[0.2em] uppercase ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Interviewer Speaking</span>
+                            </>
+                        ) : isListening ? (
+                            <>
+                                <Mic className={`w-4 h-4 animate-pulse ${isDarkMode ? 'text-green-400' : 'text-green-600'}`} />
+                                <span className={`text-[11px] font-bold tracking-[0.2em] uppercase ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>Listening</span>
+                            </>
+                        ) : (
+                            <>
+                                <div className={`w-4 h-4 rounded-full border-[2.5px] border-t-transparent animate-spin ${isDarkMode ? 'border-gray-400' : 'border-gray-500'}`} />
+                                <span className={`text-[11px] font-bold tracking-[0.2em] uppercase ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Analyzing</span>
+                            </>
+                        )}
+                    </div>
 
-                    <div className="w-full flex justify-center scale-110 sm:scale-125 md:scale-[1.6] my-auto pointer-events-none origin-center transform translate-y-16 lg:translate-y-10 z-10">
+                    {/* Centered Spectrum */}
+                    <div className="w-full flex justify-center scale-[1.25] sm:scale-[1.4] md:scale-[1.6] pointer-events-none origin-center z-10 mt-8 mb-16 lg:mt-12 lg:mb-24">
                         <VoiceSpectrum 
                             mode={spectrumMode} 
                             isDarkMode={isDarkMode}
-                            // audioStream not strictly needed since Component captures it internally if 'user'
                         />
+                    </div>
+
+                    {/* Premium Live Captions (Below Spectrum) */}
+                    <div className="w-full flex flex-col items-center gap-6 z-40 pointer-events-none min-h-[14rem]">
+                        {/* Live Caption */}
+                        <div className="w-full flex justify-center">
+                            <LiveCaption captionObj={liveCaption} isVisible={isAiSpeaking} isDarkMode={isDarkMode} />
+                        </div>
                     </div>
 
                     {/* Controls */}
