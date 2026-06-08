@@ -38,17 +38,16 @@ class LLMService:
         # Simpler approach: treat prompt as the latest user message or system message?
         messages.append({"role": "user", "content": prompt})
 
-        stream = await self.client.chat.completions.create(
+        completion = await self.client.chat.completions.create(
             messages=messages,
             model=self.model,
-            stream=True,
+            stream=False,
             temperature=0.4
         )
         
-        async for chunk in stream:
-            content = chunk.choices[0].delta.content
-            if content:
-                yield content
+        content = completion.choices[0].message.content
+        if content:
+            yield content
 
     async def generate_json_response(self, prompt: str) -> str:
         """
