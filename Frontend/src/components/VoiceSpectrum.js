@@ -20,16 +20,19 @@ const VoiceSpectrum = ({ mode, audioStream, isDarkMode }) => {
       if (mode === 'idle') return;
 
       try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') {
-            await audioCtx.resume();
-        }
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 64; // 32 frequency bins
-        analyser.smoothingTimeConstant = 0.8; // Smoothing factor
-        
+        let audioCtx;
+        let analyser;
         let source;
+
         if (mode === 'user') {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === 'suspended') {
+              await audioCtx.resume();
+          }
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64; // 32 frequency bins
+          analyser.smoothingTimeConstant = 0.8; // Smoothing factor
+
           let sourceStream = audioStream;
           if (!sourceStream) {
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -38,16 +41,39 @@ const VoiceSpectrum = ({ mode, audioStream, isDarkMode }) => {
           }
           source = audioCtx.createMediaStreamSource(sourceStream);
           source.connect(analyser);
+          
+          audioContextRef.current = audioCtx; // We will close this one on cleanup
+          analyserRef.current = analyser;
+          dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
+
         } else if (mode === 'ai') {
           if (!window.aiAudioElement) return;
-          source = audioCtx.createMediaElementSource(window.aiAudioElement);
-          source.connect(analyser);
-          analyser.connect(audioCtx.destination); // Must route AI audio to speakers
+          
+          // Create a persistent global AudioContext for the AI Audio Element
+          if (!window.aiAudioCtx) {
+              window.aiAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+              // Create the MediaElementSource ONLY ONCE globally
+              window.aiAudioSource = window.aiAudioCtx.createMediaElementSource(window.aiAudioElement);
+          }
+          
+          audioCtx = window.aiAudioCtx;
+          if (audioCtx.state === 'suspended') {
+              await audioCtx.resume();
+          }
+          
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          analyser.smoothingTimeConstant = 0.8;
+          
+          // Reconnect the persistent source to the new analyser, and analyser to speakers
+          window.aiAudioSource.disconnect();
+          window.aiAudioSource.connect(analyser);
+          analyser.connect(audioCtx.destination);
+          
+          audioContextRef.current = null; // DO NOT close the global context on cleanup
+          analyserRef.current = analyser;
+          dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
         }
-        
-        audioContextRef.current = audioCtx;
-        analyserRef.current = analyser;
-        dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
       } catch (err) {
         console.error("Error setting up audio context for spectrum", err);
       }
