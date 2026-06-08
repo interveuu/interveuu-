@@ -96,9 +96,7 @@ const LiveInterviewSession = ({
     const [isCamOn, setIsCamOn] = useState(true);
 
     // Dark Mode State
-    const [isDarkMode, setIsDarkMode] = useState(() => {
-        return sessionStorage.getItem('interview_theme') === 'dark';
-    });
+    const [isDarkMode, setIsDarkMode] = useState(true);
 
     useEffect(() => {
         sessionStorage.setItem('interview_theme', isDarkMode ? 'dark' : 'light');
@@ -265,7 +263,7 @@ const LiveInterviewSession = ({
                 </div>
             </header>
 
-            <main className="flex-1 w-full max-w-7xl mx-auto px-8 flex flex-col lg:flex-row gap-8 lg:gap-16 z-10 pb-8 h-[calc(100vh-100px)]">
+            <main className="flex-1 w-full max-w-7xl mx-auto px-8 flex flex-col lg:flex-row-reverse gap-8 lg:gap-16 z-10 pb-8 h-[calc(100vh-100px)]">
                 
                 {/* Left Side - Transcript & Context */}
                 <div className={`flex flex-col gap-6 max-w-md h-full transition-all duration-300 ease-in-out ${isTranscriptVisible ? 'w-full opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
@@ -397,14 +395,14 @@ const LiveInterviewSession = ({
                    {!isTranscriptVisible && (
                         <button
                             onClick={() => setIsTranscriptVisible(true)}
-                            className={`absolute left-0 top-[15%] transform -translate-y-1/2 p-2.5 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all z-30 flex items-center gap-2 hover:scale-105 ${isDarkMode ? 'bg-[#111827]/90 border-gray-800 hover:bg-[#1f2937]' : 'bg-white/90 border-gray-200 hover:bg-gray-50'}`}
+                            className={`absolute right-0 top-[15%] transform -translate-y-1/2 p-2.5 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all z-30 flex items-center gap-2 hover:scale-105 ${isDarkMode ? 'bg-[#111827]/90 border-gray-800 hover:bg-[#1f2937]' : 'bg-white/90 border-gray-200 hover:bg-gray-50'}`}
                         >
                             <MessageSquare className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
                             <span className={`text-xs font-medium px-1 pr-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show Transcript</span>
                         </button>
                     )}
 
-                    <div className={`absolute top-4 right-0 w-44 aspect-video bg-black rounded-2xl overflow-hidden shadow-xl border group z-30 ring-4 transition-colors duration-300 ${isDarkMode ? 'border-gray-800 ring-[#111827]/50' : 'border-gray-100 ring-white/50'}`}>
+                    <div className={`absolute top-4 left-0 w-64 lg:w-72 aspect-video bg-black rounded-2xl overflow-hidden shadow-xl border group z-30 ring-4 transition-colors duration-300 ${isDarkMode ? 'border-gray-800 ring-[#111827]/50' : 'border-gray-100 ring-white/50'}`}>
                         {isCamOn ? (
                             <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
                         ) : (
